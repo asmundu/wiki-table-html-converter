@@ -4,6 +4,8 @@ Convert any Wikipedia table into a beautiful, professional HTML report with just
 - Wikipedia page name
 - Table name
 
+**Output filename is automatically generated** based on the table name and timestamp.
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -17,7 +19,7 @@ Convert any Wikipedia table into a beautiful, professional HTML report with just
 ### Usage
 
 ```bash
-python .github/skills/wikipedia-table-to-html/scripts/extract_table.py "Page Title" "Table Name" [output.html]
+python .github/skills/wikipedia-table-to-html/scripts/extract_table.py "Page Title" "Table Name"
 ```
 
 **Example:**
@@ -27,13 +29,13 @@ python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
   "Countries by population"
 ```
 
-Output: `wikipedia-table-report-20260520_143000.html` (opens in any browser)
+Output: `countries_by_population_20260520_143000.html` (automatically named)
 
 ## ✨ Features
 
 - **Two-parameter simplicity**: Just provide the Wikipedia page and table name
 - **Beautiful styling**: Professional gradient design with responsive layout
-- **Sortable tables**: Built-in sorting (expand with JavaScript if needed)
+- **Auto-generated filenames**: Derived from table name + timestamp
 - **Self-contained**: Single HTML file, no external dependencies needed
 - **Metadata included**: Source page, extraction timestamp, row/column counts
 - **Mobile-friendly**: Responsive design works on all devices
@@ -42,10 +44,10 @@ Output: `wikipedia-table-report-20260520_143000.html` (opens in any browser)
 
 Each generated report includes:
 - Professional header with title and source attribution
-- Metadata panel showing source, date, and table dimensions
+- Metadata panel showing source page, date, and table dimensions
 - Fully formatted and styled data table
 - Responsive mobile design
-- Footer with attribution
+- Clean footer with attribution
 
 ## 🔧 Requirements
 
@@ -60,17 +62,17 @@ See `requirements.txt` for exact versions.
 ### Popular Wikipedia Tables
 
 ```bash
-# Countries by population
+# Countries by population (auto-named: countries_by_population_[timestamp].html)
 python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
   "List of countries by population" \
   "Countries by population"
 
-# Olympic medals
+# Olympic medals (auto-named: medal_[timestamp].html)
 python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
   "All-time Olympic Games medal tables" \
   "Medal count"
 
-# Largest companies
+# Largest companies (auto-named: company_[timestamp].html)
 python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
   "List of largest companies by revenue" \
   "Largest companies"
