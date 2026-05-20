@@ -1,13 +1,16 @@
 #!/bin/bash
 # Convenience wrapper for Wikipedia table extraction
-# Usage: ./convert-wiki-table.sh "Page Title" "Table Name" [output.html]
+# Usage: ./convert-wiki-table.sh "Page Title" "Table Name"
+# Output filename is automatically generated from table name and timestamp
 
-if [ $# -lt 2 ]; then
-    echo "Usage: ./convert-wiki-table.sh \"Page Title\" \"Table Name\" [output.html]"
+if [ $# -ne 2 ]; then
+    echo "Usage: ./convert-wiki-table.sh \"Page Title\" \"Table Name\""
+    echo ""
+    echo "The output HTML filename is automatically generated."
     echo ""
     echo "Examples:"
     echo "  ./convert-wiki-table.sh \"List of countries by population\" \"Countries by population\""
-    echo "  ./convert-wiki-table.sh \"List of countries by population\" \"Countries by population\" my-report.html"
+    echo "  ./convert-wiki-table.sh \"All-time Olympic Games medal tables\" \"Medal\""
     exit 1
 fi
 
@@ -19,4 +22,4 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
     exit 1
 fi
 
-python3 "$PYTHON_SCRIPT" "$1" "$2" "$3"
+python3 "$PYTHON_SCRIPT" "$1" "$2"
