@@ -3,13 +3,14 @@
 Extract a Wikipedia table and convert it to HTML report.
 
 Usage:
-    python extract_table.py <wiki_page> <table_name> [output_file]
+    python extract_table.py <wiki_page> <table_name>
+
+The output filename is automatically generated based on the table name and timestamp.
 """
 
 import sys
-import json
+import re
 from datetime import datetime
-from pathlib import Path
 
 try:
     import wikipedia
@@ -18,6 +19,16 @@ except ImportError:
     print("Error: Required packages not installed.")
     print("Install with: pip install wikipedia pandas")
     sys.exit(1)
+
+
+def sanitize_filename(text: str) -> str:
+    """Convert text to a safe filename."""
+    # Remove special characters and spaces
+    sanitized = re.sub(r'[^a-zA-Z0-9_-]', '', text.replace(' ', '_'))
+    # Remove consecutive underscores
+    sanitized = re.sub(r'_+', '_', sanitized)
+    # Limit length
+    return sanitized[:50]
 
 
 def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
@@ -70,7 +81,7 @@ def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
     return target_table
 
 
-def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str, output_file: str = None) -> str:
+def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str) -> str:
     """
     Create a beautiful HTML report from the DataFrame.
     
@@ -78,14 +89,14 @@ def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str, output
         df: pandas DataFrame
         wiki_page: Original Wikipedia page
         table_name: Table name/description
-        output_file: Output file path (auto-generated if None)
         
     Returns:
         Path to created HTML file
     """
-    if output_file is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = f"wikipedia-table-report-{timestamp}.html"
+    # Generate automatic filename based on table name and timestamp
+    sanitized_table = sanitize_filename(table_name)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f"{sanitized_table}_{timestamp}.html"
     
     # Convert DataFrame to HTML table
     table_html = df.to_html(classes="data-table", border=0)
@@ -282,15 +293,16 @@ def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str, output
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python extract_table.py <wiki_page> <table_name> [output_file]")
+    if len(sys.argv) != 3:
+        print("Usage: python extract_table.py <wiki_page> <table_name>")
+        print("\nThe output HTML filename is automatically generated from the table name and timestamp.")
         print("\nExample:")
         print('  python extract_table.py "List of countries by population" "Countries by population"')
+        print("\nOutput: countries_by_population_20260520_143000.html")
         sys.exit(1)
     
     wiki_page = sys.argv[1]
     table_name = sys.argv[2]
-    output_file = sys.argv[3] if len(sys.argv) > 3 else None
     
     print(f"Fetching Wikipedia page: {wiki_page}")
     df = extract_wikipedia_table(wiki_page, table_name)
@@ -298,7 +310,7 @@ def main():
     print(f"Found table with {len(df)} rows and {len(df.columns)} columns")
     print("Generating HTML report...")
     
-    output_path = create_html_report(df, wiki_page, table_name, output_file)
+    output_path = create_html_report(df, wiki_page, table_name)
     
     print(f"✓ Report saved to: {output_path}")
     return output_path
