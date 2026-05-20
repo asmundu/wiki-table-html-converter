@@ -10,15 +10,15 @@ The output filename is automatically generated based on the table name and times
 
 import sys
 import re
+import time
 from datetime import datetime
 
 try:
-    import wikipedia
     import pandas as pd
     import requests
 except ImportError:
     print("Error: Required packages not installed.")
-    print("Install with: pip install wikipedia pandas requests")
+    print("Install with: pip install pandas requests")
     sys.exit(1)
 
 
@@ -32,6 +32,67 @@ def sanitize_filename(text: str) -> str:
     return sanitized[:50]
 
 
+def get_wikipedia_page_html(wiki_page: str, max_retries: int = 3) -> str:
+    """
+    Fetch Wikipedia page HTML with retries and proper headers.
+    
+    Args:
+        wiki_page: Wikipedia page title
+        max_retries: Number of retry attempts
+        
+    Returns:
+        HTML content of the page
+    """
+    # Multiple User-Agent options to try
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    ]
+    
+    # Format Wikipedia URL
+    wiki_url = f"https://en.wikipedia.org/wiki/{wiki_page.replace(' ', '_')}"
+    
+    for attempt in range(max_retries):
+        try:
+            headers = {
+                'User-Agent': user_agents[attempt % len(user_agents)],
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+            }
+            
+            print(f"Attempt {attempt + 1}/{max_retries}: Fetching {wiki_page}...")
+            response = requests.get(wiki_url, headers=headers, timeout=15)
+            response.raise_for_status()
+            return response.text
+            
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                print(f"Error: Page '{wiki_page}' not found (404)")
+                sys.exit(1)
+            elif e.response.status_code == 403:
+                print(f"Forbidden (403). Retrying with different User-Agent...")
+                if attempt < max_retries - 1:
+                    time.sleep(2)  # Wait before retry
+                    continue
+            print(f"HTTP Error: {e}")
+            
+        except requests.exceptions.Timeout:
+            print(f"Request timeout. Retrying...")
+            if attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+                
+        except requests.exceptions.ConnectionError:
+            print(f"Connection error. Retrying...")
+            if attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+    
+    print(f"Error: Failed to fetch page after {max_retries} attempts")
+    sys.exit(1)
+
+
 def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
     """
     Extract a specific table from a Wikipedia page.
@@ -43,32 +104,12 @@ def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
     Returns:
         pandas DataFrame containing the table
     """
-    try:
-        page = wikipedia.page(wiki_page)
-    except wikipedia.exceptions.DisambiguationError as e:
-        print(f"Error: '{wiki_page}' is ambiguous. Did you mean one of:")
-        for option in e.options[:5]:
-            print(f"  - {option}")
-        sys.exit(1)
-    except wikipedia.exceptions.PageError:
-        print(f"Error: Wikipedia page '{wiki_page}' not found.")
-        sys.exit(1)
-    
-    # Fetch page content with proper User-Agent to avoid 403 errors
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
-    
-    try:
-        response = requests.get(page.url, headers=headers, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        print(f"Error: Failed to fetch page content: {e}")
-        sys.exit(1)
+    # Fetch page HTML
+    html_content = get_wikipedia_page_html(wiki_page)
     
     # Parse tables from the HTML
     try:
-        tables = pd.read_html(response.text)
+        tables = pd.read_html(html_content)
     except ValueError as e:
         print(f"Error: No tables found on page '{wiki_page}'")
         sys.exit(1)
@@ -77,17 +118,20 @@ def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
         print(f"Error: No tables found on page '{wiki_page}'")
         sys.exit(1)
     
+    print(f"Found {len(tables)} table(s) on page")
+    
     # Try to find table by name (first row contains headers)
     target_table = None
-    for table in tables:
+    for idx, table in enumerate(tables):
         # Check if any column header matches the table name (partial match)
         if any(table_name.lower() in str(col).lower() for col in table.columns):
+            print(f"Found matching table #{idx + 1}")
             target_table = table
             break
     
     # If not found by header, use first table
     if target_table is None:
-        print(f"Warning: Table '{table_name}' not found. Using first table from page.")
+        print(f"Table '{table_name}' not found. Using first table from page.")
         target_table = tables[0]
     
     return target_table
@@ -316,7 +360,10 @@ def main():
     wiki_page = sys.argv[1]
     table_name = sys.argv[2]
     
-    print(f"Fetching Wikipedia page: {wiki_page}")
+    print(f"\n{'='*60}")
+    print(f"Wikipedia Table to HTML Converter")
+    print(f"{'='*60}\n")
+    
     df = extract_wikipedia_table(wiki_page, table_name)
     
     print(f"Found table with {len(df)} rows and {len(df.columns)} columns")
@@ -324,7 +371,7 @@ def main():
     
     output_path = create_html_report(df, wiki_page, table_name)
     
-    print(f"✓ Report saved to: {output_path}")
+    print(f"\n✓ Report saved to: {output_path}\n")
     return output_path
 
 
