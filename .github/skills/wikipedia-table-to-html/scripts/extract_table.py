@@ -4,21 +4,22 @@ Extract a Wikipedia table and convert it to HTML report.
 
 Usage:
     python extract_table.py <wiki_page> <table_name>
-
-The output filename is automatically generated based on the table name and timestamp.
 """
 
 import sys
 import re
 import time
+import warnings
 from datetime import datetime
+
+warnings.filterwarnings('ignore')
 
 try:
     import pandas as pd
     import requests
 except ImportError:
     print("Error: Required packages not installed.")
-    print("Install with: pip install pandas requests")
+    print("Install with: pip install pandas requests lxml")
     sys.exit(1)
 
 
@@ -29,8 +30,8 @@ def sanitize_filename(text: str) -> str:
     return sanitized[:50]
 
 
-def get_wikipedia_page_html(wiki_page: str, max_retries: int = 3) -> str:
-    """Fetch Wikipedia page HTML with retries and proper headers."""
+def get_wikipedia_page_html(wiki_page: str) -> str:
+    """Fetch Wikipedia page HTML."""
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
@@ -39,64 +40,43 @@ def get_wikipedia_page_html(wiki_page: str, max_retries: int = 3) -> str:
     
     wiki_url = f"https://en.wikipedia.org/wiki/{wiki_page.replace(' ', '_')}"
     
-    for attempt in range(max_retries):
+    for attempt in range(3):
         try:
-            headers = {
-                'User-Agent': user_agents[attempt % len(user_agents)],
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            }
-            
-            print(f"Attempt {attempt + 1}/{max_retries}: Fetching {wiki_page}...")
+            headers = {'User-Agent': user_agents[attempt % len(user_agents)]}
             response = requests.get(wiki_url, headers=headers, timeout=15)
             response.raise_for_status()
             return response.text
-            
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                print(f"Error: Page '{wiki_page}' not found (404)")
-                sys.exit(1)
-            elif e.response.status_code == 403:
-                print(f"Forbidden (403). Trying different User-Agent...")
-                if attempt < max_retries - 1:
-                    time.sleep(2)
-                    continue
-            print(f"HTTP Error: {e}")
-            
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
-            print(f"Network error: {e}. Retrying...")
-            if attempt < max_retries - 1:
+        except Exception as e:
+            if attempt < 2:
                 time.sleep(2)
                 continue
+            raise
     
-    print(f"Error: Failed to fetch page after {max_retries} attempts")
-    sys.exit(1)
+    raise Exception(f"Failed to fetch {wiki_page}")
 
 
 def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
     """Extract a specific table from a Wikipedia page."""
+    print(f"Fetching: {wiki_page}...")
     html_content = get_wikipedia_page_html(wiki_page)
     
-    try:
-        tables = pd.read_html(html_content)
-    except ValueError:
-        print(f"Error: No tables found on page '{wiki_page}'")
-        sys.exit(1)
+    print(f"Parsing tables...")
+    tables = pd.read_html(html_content)
     
     if not tables:
         print(f"Error: No tables found on page '{wiki_page}'")
         sys.exit(1)
     
-    print(f"Found {len(tables)} table(s) on page")
+    print(f"Found {len(tables)} table(s)")
     
     target_table = None
     for idx, table in enumerate(tables):
         if any(table_name.lower() in str(col).lower() for col in table.columns):
-            print(f"Found matching table #{idx + 1}")
             target_table = table
             break
     
     if target_table is None:
-        print(f"Table '{table_name}' not found. Using first table from page.")
+        print(f"Using first table...")
         target_table = tables[0]
     
     return target_table
@@ -115,7 +95,7 @@ def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str) -> str
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wikipedia Table Report: {table_name}</title>
+    <title>Wikipedia Table: {table_name}</title>
     <style>
         * {{
             margin: 0;
@@ -124,7 +104,7 @@ def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str) -> str
         }}
         
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 40px 20px;
@@ -202,16 +182,11 @@ def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str) -> str
             padding: 15px;
             text-align: left;
             font-weight: 600;
-            white-space: nowrap;
         }}
         
         .data-table td {{
             padding: 12px 15px;
             border-bottom: 1px solid #e9ecef;
-        }}
-        
-        .data-table tbody tr {{
-            transition: background-color 0.2s ease;
         }}
         
         .data-table tbody tr:hover {{
@@ -230,54 +205,30 @@ def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str) -> str
             font-size: 0.9em;
             border-top: 1px solid #e9ecef;
         }}
-        
-        @media (max-width: 768px) {{
-            .header {{
-                padding: 20px;
-            }}
-            
-            .header h1 {{
-                font-size: 1.8em;
-            }}
-            
-            .metadata {{
-                grid-template-columns: 1fr;
-                padding: 15px 20px;
-            }}
-            
-            .table-container {{
-                padding: 20px;
-            }}
-            
-            .data-table th, .data-table td {{
-                padding: 8px 10px;
-                font-size: 0.85em;
-            }}
-        }}
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>{table_name}</h1>
-            <p>Data sourced from Wikipedia</p>
+            <p>Data from Wikipedia</p>
         </div>
         
         <div class="metadata">
             <div class="metadata-item">
-                <span class="metadata-label">Source Page</span>
+                <span class="metadata-label">Source</span>
                 <span class="metadata-value">{wiki_page}</span>
             </div>
             <div class="metadata-item">
-                <span class="metadata-label">Extraction Date</span>
+                <span class="metadata-label">Date</span>
                 <span class="metadata-value">{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</span>
             </div>
             <div class="metadata-item">
-                <span class="metadata-label">Total Rows</span>
+                <span class="metadata-label">Rows</span>
                 <span class="metadata-value">{len(df):,}</span>
             </div>
             <div class="metadata-item">
-                <span class="metadata-label">Total Columns</span>
+                <span class="metadata-label">Columns</span>
                 <span class="metadata-value">{len(df.columns)}</span>
             </div>
         </div>
@@ -287,7 +238,7 @@ def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str) -> str
         </div>
         
         <div class="footer">
-            <p>Generated by Wikipedia Table to HTML Converter | Data sourced from Wikipedia</p>
+            <p>Wikipedia Table to HTML Converter</p>
         </div>
     </div>
 </body>
@@ -307,18 +258,15 @@ def main():
     wiki_page = sys.argv[1]
     table_name = sys.argv[2]
     
-    print(f"\n{'='*60}")
-    print(f"Wikipedia Table to HTML Converter")
-    print(f"{'='*60}\n")
-    
-    df = extract_wikipedia_table(wiki_page, table_name)
-    
-    print(f"Found table with {len(df)} rows and {len(df.columns)} columns")
-    print("Generating HTML report...")
-    
-    output_path = create_html_report(df, wiki_page, table_name)
-    
-    print(f"\n✓ Report saved to: {output_path}\n")
+    try:
+        df = extract_wikipedia_table(wiki_page, table_name)
+        print(f"Table: {len(df)} rows × {len(df.columns)} columns")
+        print("Generating HTML...")
+        output_path = create_html_report(df, wiki_page, table_name)
+        print(f"\n✓ Created: {output_path}\n")
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
