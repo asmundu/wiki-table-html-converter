@@ -24,33 +24,19 @@ except ImportError:
 
 def sanitize_filename(text: str) -> str:
     """Convert text to a safe filename."""
-    # Remove special characters and spaces
     sanitized = re.sub(r'[^a-zA-Z0-9_-]', '', text.replace(' ', '_'))
-    # Remove consecutive underscores
     sanitized = re.sub(r'_+', '_', sanitized)
-    # Limit length
     return sanitized[:50]
 
 
 def get_wikipedia_page_html(wiki_page: str, max_retries: int = 3) -> str:
-    """
-    Fetch Wikipedia page HTML with retries and proper headers.
-    
-    Args:
-        wiki_page: Wikipedia page title
-        max_retries: Number of retry attempts
-        
-    Returns:
-        HTML content of the page
-    """
-    # Multiple User-Agent options to try
+    """Fetch Wikipedia page HTML with retries and proper headers."""
     user_agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
     ]
     
-    # Format Wikipedia URL
     wiki_url = f"https://en.wikipedia.org/wiki/{wiki_page.replace(' ', '_')}"
     
     for attempt in range(max_retries):
@@ -58,7 +44,6 @@ def get_wikipedia_page_html(wiki_page: str, max_retries: int = 3) -> str:
             headers = {
                 'User-Agent': user_agents[attempt % len(user_agents)],
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
             }
             
             print(f"Attempt {attempt + 1}/{max_retries}: Fetching {wiki_page}...")
@@ -71,20 +56,14 @@ def get_wikipedia_page_html(wiki_page: str, max_retries: int = 3) -> str:
                 print(f"Error: Page '{wiki_page}' not found (404)")
                 sys.exit(1)
             elif e.response.status_code == 403:
-                print(f"Forbidden (403). Retrying with different User-Agent...")
+                print(f"Forbidden (403). Trying different User-Agent...")
                 if attempt < max_retries - 1:
-                    time.sleep(2)  # Wait before retry
+                    time.sleep(2)
                     continue
             print(f"HTTP Error: {e}")
             
-        except requests.exceptions.Timeout:
-            print(f"Request timeout. Retrying...")
-            if attempt < max_retries - 1:
-                time.sleep(2)
-                continue
-                
-        except requests.exceptions.ConnectionError:
-            print(f"Connection error. Retrying...")
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            print(f"Network error: {e}. Retrying...")
             if attempt < max_retries - 1:
                 time.sleep(2)
                 continue
@@ -94,23 +73,12 @@ def get_wikipedia_page_html(wiki_page: str, max_retries: int = 3) -> str:
 
 
 def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
-    """
-    Extract a specific table from a Wikipedia page.
-    
-    Args:
-        wiki_page: Wikipedia page title
-        table_name: Name/header of the table to extract
-        
-    Returns:
-        pandas DataFrame containing the table
-    """
-    # Fetch page HTML
+    """Extract a specific table from a Wikipedia page."""
     html_content = get_wikipedia_page_html(wiki_page)
     
-    # Parse tables from the HTML
     try:
         tables = pd.read_html(html_content)
-    except ValueError as e:
+    except ValueError:
         print(f"Error: No tables found on page '{wiki_page}'")
         sys.exit(1)
     
@@ -120,16 +88,13 @@ def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
     
     print(f"Found {len(tables)} table(s) on page")
     
-    # Try to find table by name (first row contains headers)
     target_table = None
     for idx, table in enumerate(tables):
-        # Check if any column header matches the table name (partial match)
         if any(table_name.lower() in str(col).lower() for col in table.columns):
             print(f"Found matching table #{idx + 1}")
             target_table = table
             break
     
-    # If not found by header, use first table
     if target_table is None:
         print(f"Table '{table_name}' not found. Using first table from page.")
         target_table = tables[0]
@@ -138,26 +103,13 @@ def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
 
 
 def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str) -> str:
-    """
-    Create a beautiful HTML report from the DataFrame.
-    
-    Args:
-        df: pandas DataFrame
-        wiki_page: Original Wikipedia page
-        table_name: Table name/description
-        
-    Returns:
-        Path to created HTML file
-    """
-    # Generate automatic filename based on table name and timestamp
+    """Create a beautiful HTML report from the DataFrame."""
     sanitized_table = sanitize_filename(table_name)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_file = f"{sanitized_table}_{timestamp}.html"
     
-    # Convert DataFrame to HTML table
     table_html = df.to_html(classes="data-table", border=0)
     
-    # Create complete HTML document with styling
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -341,7 +293,6 @@ def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str) -> str
 </body>
 </html>"""
     
-    # Write to file
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html_content)
     
@@ -351,10 +302,6 @@ def create_html_report(df: pd.DataFrame, wiki_page: str, table_name: str) -> str
 def main():
     if len(sys.argv) != 3:
         print("Usage: python extract_table.py <wiki_page> <table_name>")
-        print("\nThe output HTML filename is automatically generated from the table name and timestamp.")
-        print("\nExample:")
-        print('  python extract_table.py "World population" "Global"')
-        print("\nOutput: global_20260520_143000.html")
         sys.exit(1)
     
     wiki_page = sys.argv[1]
@@ -372,7 +319,6 @@ def main():
     output_path = create_html_report(df, wiki_page, table_name)
     
     print(f"\n✓ Report saved to: {output_path}\n")
-    return output_path
 
 
 if __name__ == "__main__":
