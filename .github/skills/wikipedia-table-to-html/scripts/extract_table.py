@@ -15,9 +15,10 @@ from datetime import datetime
 try:
     import wikipedia
     import pandas as pd
+    import requests
 except ImportError:
     print("Error: Required packages not installed.")
-    print("Install with: pip install wikipedia pandas")
+    print("Install with: pip install wikipedia pandas requests")
     sys.exit(1)
 
 
@@ -44,7 +45,6 @@ def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
     """
     try:
         page = wikipedia.page(wiki_page)
-        html = page.content
     except wikipedia.exceptions.DisambiguationError as e:
         print(f"Error: '{wiki_page}' is ambiguous. Did you mean one of:")
         for option in e.options[:5]:
@@ -54,9 +54,21 @@ def extract_wikipedia_table(wiki_page: str, table_name: str) -> pd.DataFrame:
         print(f"Error: Wikipedia page '{wiki_page}' not found.")
         sys.exit(1)
     
-    # Parse tables from the page using pandas
+    # Fetch page content with proper User-Agent to avoid 403 errors
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+    
     try:
-        tables = pd.read_html(page.url)
+        response = requests.get(page.url, headers=headers, timeout=10)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Error: Failed to fetch page content: {e}")
+        sys.exit(1)
+    
+    # Parse tables from the HTML
+    try:
+        tables = pd.read_html(response.text)
     except ValueError as e:
         print(f"Error: No tables found on page '{wiki_page}'")
         sys.exit(1)
@@ -297,8 +309,8 @@ def main():
         print("Usage: python extract_table.py <wiki_page> <table_name>")
         print("\nThe output HTML filename is automatically generated from the table name and timestamp.")
         print("\nExample:")
-        print('  python extract_table.py "List of countries by population" "Countries by population"')
-        print("\nOutput: countries_by_population_20260520_143000.html")
+        print('  python extract_table.py "World population" "Global"')
+        print("\nOutput: global_20260520_143000.html")
         sys.exit(1)
     
     wiki_page = sys.argv[1]
