@@ -48,7 +48,20 @@ If you've set up this as a VS Code skill in `.github/skills/`, use:
 |-----------|-------------|---------|
 | `wiki-page` | Exact Wikipedia page title | "List of countries by population" |
 | `table-name` | Table header or name to extract | "Countries by population" |
-| `output_file` (optional) | Custom output filename | "my-report.html" |
+
+**Note**: The output HTML filename is **automatically generated** from the table name and current timestamp. You do not provide an output filename.
+
+## Output Filename Format
+
+The generated HTML file is named automatically using:
+```
+[sanitized_table_name]_YYYYMMDD_HHMMSS.html
+```
+
+**Examples:**
+- Table name: "Countries by population" → `countries_by_population_20260520_143000.html`
+- Table name: "Medal count" → `medal_count_20260520_143000.html`
+- Table name: "Largest companies by revenue" → `largest_companies_by_revenue_20260520_143000.html`
 
 ## Examples
 
@@ -59,7 +72,7 @@ python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
   "Countries by population"
 ```
 
-Output: `wikipedia-table-report-20260520_143000.html`
+Output: `countries_by_population_20260520_143000.html`
 
 ### Example 2: Olympic Medals
 ```bash
@@ -68,6 +81,8 @@ python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
   "Medal"
 ```
 
+Output: `medal_20260520_143000.html`
+
 ### Example 3: Fortune 500 Companies
 ```bash
 python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
@@ -75,13 +90,16 @@ python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
   "Company"
 ```
 
-### Example 4: Custom Output Filename
+Output: `company_20260520_143000.html`
+
+### Example 4: US Presidents
 ```bash
 python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
-  "List of countries by GDP" \
-  "GDP" \
-  "global-gdp.html"
+  "List of presidents of the United States" \
+  "President"
 ```
+
+Output: `president_20260520_143000.html`
 
 ## Finding Wikipedia Pages and Tables
 
@@ -109,15 +127,7 @@ The script generates a professional HTML report with:
   - Hover effects on rows
   - Mobile-friendly layout
 - **Footer**: Attribution to Wikipedia
-
-### Output File Format
-```
-wikipedia-table-report-YYYYMMDD_HHMMSS.html
-```
-
-Example: `wikipedia-table-report-20260520_143000.html`
-
-Open in any web browser to view.
+- **Automatic Naming**: Filename based on table name and current timestamp
 
 ## Troubleshooting
 
@@ -166,13 +176,13 @@ Create a script `batch_convert.sh`:
 #!/bin/bash
 
 python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
-  "List of countries by population" "Countries" "countries.html"
+  "List of countries by population" "Countries"
 
 python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
-  "All-time Olympic Games medal tables" "Medal" "olympics.html"
+  "All-time Olympic Games medal tables" "Medal"
 
 python .github/skills/wikipedia-table-to-html/scripts/extract_table.py \
-  "List of largest companies by revenue" "Company" "companies.html"
+  "List of largest companies by revenue" "Company"
 ```
 
 Then run:
@@ -180,6 +190,8 @@ Then run:
 chmod +x batch_convert.sh
 ./batch_convert.sh
 ```
+
+All files will be automatically named with timestamps to avoid conflicts.
 
 ### Customizing the Output
 
@@ -196,6 +208,7 @@ Edit the HTML generation section in `extract_table.py` to customize:
 3. **Save reports**: Generated HTML files are fully self-contained and portable
 4. **Print to PDF**: Most browsers can print the HTML as PDF for sharing
 5. **Check source**: Reports include Wikipedia attribution for credibility
+6. **Multiple runs**: Each run generates a new file with a unique timestamp, so previous reports are preserved
 
 ## Support
 
